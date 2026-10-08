@@ -1,0 +1,7 @@
+*.pfx
+*.p12
+*.pem
+*envEvento*.xml
+*retEvento*.xml
+__pycache__/
+.venv/
