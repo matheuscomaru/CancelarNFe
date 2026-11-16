@@ -235,7 +235,9 @@ class App(tk.Tk):
             tc = tempfile.NamedTemporaryFile(delete=False, suffix="-cert.pem")
             tkf = tempfile.NamedTemporaryFile(delete=False, suffix="-key.pem")
             try:
-                tc.write(cert.public_bytes(serialization.Encoding.PEM))
+                for c in [cert, *chain]:
+                    tc.write(c.public_bytes(serialization.Encoding.PEM))
+                self._log(f"Cadeia do certificado: {1 + len(chain)} certificado(s)")
                 tc.close()
                 tkf.write(key.private_bytes(
                     serialization.Encoding.PEM,
@@ -247,7 +249,7 @@ class App(tk.Tk):
                     url, data=soap,
                     headers={"Content-Type":
                              f'application/soap+xml; charset=utf-8; action="{core.SOAP_ACTION}"'},
-                    cert=(tc.name, tkf.name), timeout=30)
+                    cert=(tc.name, tkf.name), verify=core.ca_bundle(), timeout=30)
             finally:
                 Path(tc.name).unlink(missing_ok=True)
                 Path(tkf.name).unlink(missing_ok=True)

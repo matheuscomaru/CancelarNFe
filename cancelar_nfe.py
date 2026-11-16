@@ -35,7 +35,22 @@ import sys
 import tempfile
 from pathlib import Path
 
+import certifi
 import requests
+from cryptography import x509
+
+
+def ca_bundle() -> str:
+    """Bundle certifi + raízes ICP-Brasil (pasta certs/), usada pelas SEFAZ."""
+    out = Path(tempfile.gettempdir()) / "cancelarnfe-ca-bundle.pem"
+    pem = Path(certifi.where()).read_bytes()
+    for f in sorted((Path(__file__).parent / "certs").glob("*.crt")):
+        data = f.read_bytes()
+        if b"-----BEGIN" not in data:
+            data = x509.load_der_x509_certificate(data).public_bytes(serialization.Encoding.PEM)
+        pem += b"\n" + data
+    out.write_bytes(pem)
+    return str(out)
 from cryptography.hazmat.primitives import hashes, serialization
 from cryptography.hazmat.primitives.asymmetric import padding
 from cryptography.hazmat.primitives.serialization import pkcs12
@@ -414,7 +429,8 @@ def main() -> int:
     tmp_cert = tempfile.NamedTemporaryFile(delete=False, suffix="-cert.pem")
     tmp_key = tempfile.NamedTemporaryFile(delete=False, suffix="-key.pem")
     try:
-        tmp_cert.write(cert.public_bytes(serialization.Encoding.PEM))
+        for c in [cert, *chain]:
+            tmp_cert.write(c.public_bytes(serialization.Encoding.PEM))
         tmp_cert.close()
         tmp_key.write(key.private_bytes(
             serialization.Encoding.PEM,
@@ -428,7 +444,8 @@ def main() -> int:
         }
         print("[info] enviando evento de cancelamento para a SEFAZ...")
         resp = requests.post(url, data=soap, headers=headers,
-                             cert=(tmp_cert.name, tmp_key.name), timeout=30)
+                             cert=(tmp_cert.name, tmp_key.name), verify=ca_bundle(),
+                             timeout=30)
     except Exception as e:
         print(f"[erro] falha de comunicação com a SEFAZ: {e}", file=sys.stderr)
         return 4
